@@ -1,51 +1,71 @@
-import express, { Request, Response } from "express";
 import dotenv from "dotenv";
 import path from "path";
-
-import app from "./app";
+import http from "http";
 import mongoose from "mongoose";
 
+import app from "./app";
+import { attachWebSocketServer } from "./ws/server";
+
 process.on("uncaughtException", (err) => {
-  console.log("UNCAUGHT EXCEPTION! 💥 Shutting down...");
-  console.log(err.name, err.message);
+  console.error("UNCAUGHT EXCEPTION! 💥 Shutting down...");
+  console.error(err);
   process.exit(1);
 });
 
+// Load env ONCE, as early as possible
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
-app.use(express.json());
+
+const PORT = Number(process.env.PORT ?? 1996);
+const HOST = process.env.HOST ?? "0.0.0.0";
 
 const DB = process.env.MONGODB_URL?.replace(
   "<PASSWORD>",
-  process.env?.MONGODB_PASSWORD as string,
+  process.env.MONGODB_PASSWORD ?? "",
 );
 
+if (!DB) {
+  console.error("Missing MONGODB_URL");
+  process.exit(1);
+}
+
 mongoose
-  .connect(DB as string)
-  .then(() => console.log("DB connection successful!"));
+  .connect(DB)
+  .then(() => console.log("DB connection successful!"))
+  .catch((err) => {
+    console.error("DB connection failed:", err);
+    process.exit(1);
+  });
 
-app.get("/", (req: Request, res: Response) => {
-  res.json({ message: "Hello from TypeScript Express" });
-});
+// Create HTTP server from express app
+const appServer = http.createServer(app);
 
-const PORT = process.env.PORT || 1996;
+// Attach WS server to same HTTP server
+const { broadcastChatCreated, wss } = attachWebSocketServer(appServer);
 
-const server = app.listen(PORT, () => {
-  console.log(`Server running on port http://localhost:${PORT}`);
+// (Optional) store it for controllers to use, but strongly type it (see below)
+app.locals.broadcastChatCreated = broadcastChatCreated;
+
+const server = appServer.listen(PORT, HOST, () => {
+  const baseUrl =
+    HOST === "0.0.0.0" ? `http://localhost:${PORT}` : `http://${HOST}:${PORT}`;
+
+  console.log(`Server running on ${baseUrl}`);
+  console.log(
+    `WebSocket running on ws://${HOST === "0.0.0.0" ? "localhost" : HOST}:${PORT}/ws`,
+  );
 });
 
 process.on("unhandledRejection", (err: any) => {
-  console.log("UNHANDLED REJECTION! 💥 Shutting down...");
-  console.log(err.name, err.message);
-  server.close(() => {
-    process.exit(1);
-  });
+  console.error("UNHANDLED REJECTION! 💥 Shutting down...");
+  console.error(err);
+  server.close(() => process.exit(1));
 });
 
 process.on("SIGTERM", () => {
   console.log("👋 SIGTERM RECEIVED. Shutting down gracefully");
-  server.close(() => {
-    console.log("💥 Process terminated!");
-  });
+  server.close(() => console.log("💥 Process terminated!"));
+  // Optional: close ws server too
+  wss.close();
 });
 
 export default app;

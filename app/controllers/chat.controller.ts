@@ -5,6 +5,8 @@ import { Contact } from "../models/friends.schema";
 import APIFeatures from "../utils/api-features";
 import { Message } from "../models/messages.schema";
 import AppError from "../utils/app-error";
+import { RequestHandler } from "express";
+import User from "../models/user.schema";
 
 export const getMyChats = catchAsync(async (req, res, next) => {
   const meId = new Types.ObjectId((req as any).user.id);
@@ -130,3 +132,62 @@ export const getChatMessages = catchAsync(async (req, res, next) => {
     isMutual,
   });
 });
+
+type ChatParams = Record<string, string>; // or { chatId: string } if you have one
+
+type CreateDmBody = {}; // receiver comes from params
+
+const makeDmKey = (a: Types.ObjectId, b: Types.ObjectId) => {
+  const sa = String(a);
+  const sb = String(b);
+  return sa < sb ? `${sa}:${sb}` : `${sb}:${sa}`;
+};
+
+export const createDmChat: RequestHandler<ChatParams, any, CreateDmBody> =
+  catchAsync(async (req, res, next) => {
+    const meRaw =
+      (req as any).user?.id || (req as any).user?._id || (req as any).user?.id;
+    if (!meRaw) return next(new AppError("Not authenticated", 401));
+
+    const { receiverId } = req.params;
+
+    if (!Types.ObjectId.isValid(receiverId)) {
+      return next(new AppError("Invalid receiverId", 400));
+    }
+
+    const meId = new Types.ObjectId(String(meRaw));
+    const receiverObjectId = new Types.ObjectId(receiverId);
+
+    if (String(meId) === String(receiverObjectId)) {
+      return next(new AppError("You cannot create a chat with yourself", 400));
+    }
+
+    const receiverExists = await User.exists({ _id: receiverObjectId });
+    if (!receiverExists) return next(new AppError("Invalid User ID", 400));
+
+    const dmKey = makeDmKey(meId, receiverObjectId);
+
+    // Find or create (prevents duplicates)
+    let chat = await Chat.findOne({ type: "dm", dmKey });
+
+    if (!chat) {
+      chat = await Chat.create({
+        type: "dm",
+        dmKey,
+        members: [meId, receiverObjectId],
+      });
+    }
+
+    // Broadcast
+    req.app.locals.broadcastChatCreated?.({
+      id: String(chat._id),
+      type: chat.type,
+      members: chat.members.map(String),
+      createdAt: chat.createdAt?.toISOString?.() ?? undefined,
+    });
+
+    return res.status(201).json({
+      status: "success",
+      data: { chat },
+    });
+  });
