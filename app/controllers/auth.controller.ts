@@ -56,7 +56,7 @@ const createSendToken = (
 ) => {
   const token = signToken(user._id);
 
-  res.cookie("jwt", token, {
+  res.cookie("access_token", token, {
     expires: new Date(
       Date.now() + +process.env.JWT_COOKIE_EXPIRES_IN! * 24 * 60 * 60 * 1000,
     ),
@@ -143,7 +143,7 @@ export const protect: RequestHandler = catchAsync(async (req, res, next) => {
   if (auth?.startsWith("Bearer ")) {
     token = auth.split(" ")[1];
   } else if (req.cookies?.jwt) {
-    token = req.cookies.jwt as string;
+    token = req.cookies.access_token as string;
   }
 
   if (!token) {

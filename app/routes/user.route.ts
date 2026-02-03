@@ -17,6 +17,7 @@ import {
 const router = express.Router();
 
 router.post("/signin", signinUser);
+router.post("/resendToken", signinUser);
 router.post("/verify", authenticateUser);
 
 // Protect all routes after this middleware
