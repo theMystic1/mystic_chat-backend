@@ -40,6 +40,21 @@ export type ChatDTO = {
   createdAt?: string;
 };
 
+export type MessageDTO = {
+  id: string;
+  chatId: string;
+  senderId: string;
+  type: "text" | "image" | "file" | "system";
+  text?: string;
+  createdAt?: string;
+};
+
+/** Strict server->client event types */
+export type ServerEvent =
+  | { type: "welcome"; data: string }
+  | { type: "chat_created"; data: ChatDTO }
+  | { type: "message_sent"; data: MessageDTO };
+
 export const attachWebSocketServer = (server: Server) => {
   const wss = new WebSocketServer({
     server,
@@ -49,13 +64,19 @@ export const attachWebSocketServer = (server: Server) => {
 
   wss.on("connection", (socket) => {
     sendJson(socket, { type: "welcome", data: "welcome to mystChats" });
-
     socket.on("error", console.error);
   });
 
   const broadcastChatCreated = (chat: ChatDTO) => {
-    broadcast(wss, { type: "chat_created", data: chat });
+    broadcast(wss, { type: "chat_created", data: chat } satisfies ServerEvent);
   };
 
-  return { wss, broadcastChatCreated };
+  const broadcastMessageCreated = (message: MessageDTO) => {
+    broadcast(wss, {
+      type: "message_sent",
+      data: message,
+    } satisfies ServerEvent);
+  };
+
+  return { wss, broadcastChatCreated, broadcastMessageCreated };
 };

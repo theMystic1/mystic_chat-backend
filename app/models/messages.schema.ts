@@ -46,6 +46,7 @@ export type MessageDoc = {
   // optional: "server side status" for last-mile UX
   // (WhatsApp does it per-recipient, but this is a simple MVP field)
   status: DeliveryStatus;
+  createdAt?: Date;
 };
 
 const attachmentSchema = new Schema<Attachment>(
