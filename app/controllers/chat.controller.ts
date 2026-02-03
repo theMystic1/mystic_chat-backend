@@ -213,10 +213,12 @@ export const sendMessage = catchAsync(async (req, res, next) => {
     type?: "text" | "image" | "file" | "system";
   };
 
-  if (!message && type === "text") {
+  const normalizedType = type ?? "text";
+  const messageText = typeof message === "string" ? message.trim() : "";
+
+  if (normalizedType === "text" && !messageText) {
     return next(new AppError("Message text is required", 400));
   }
-
   // 1) Chat must exist
   const chat = await Chat.findById(chatObjectId).select("members type").lean();
   if (!chat) return next(new AppError("Chat not found", 404));
@@ -232,8 +234,8 @@ export const sendMessage = catchAsync(async (req, res, next) => {
   const chatMessage = await Message.create({
     senderId: meId,
     chatId: chatObjectId,
-    text: message ?? "",
-    type: type ?? "text",
+    text: messageText,
+    type: normalizedType,
   });
 
   // (Optional but recommended) update chat metadata for inbox ordering
