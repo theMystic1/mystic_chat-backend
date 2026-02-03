@@ -67,8 +67,6 @@ const limiter = rateLimit({
 });
 app.use("/api", limiter);
 
-// Stripe webhook, BEFORE body-parser, because stripe needs the body as stream
-
 // Body parser, reading data from body into req.body
 app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));

@@ -143,7 +143,7 @@ export const protect: RequestHandler = catchAsync(async (req, res, next) => {
   if (auth?.startsWith("Bearer ")) {
     token = auth.split(" ")[1];
   } else if (req.cookies?.jwt) {
-    token = req.cookies.jwt as string;
+    token = req.cookies.access_token as string;
   }
 
   if (!token) {
