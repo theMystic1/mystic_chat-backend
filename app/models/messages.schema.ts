@@ -122,7 +122,7 @@ const messageSchema = new Schema<MessageDoc>(
 );
 
 // Pagination: latest messages in a conversation
-messageSchema.index({ conversationId: 1, createdAt: -1 });
+messageSchema.index({ chatId: 1, createdAt: -1 });
 
 // Optional: ensure reactions don’t duplicate per user+emoji (enforced at app level)
 export const Message = mongoose.model<MessageDoc>("Message", messageSchema);
