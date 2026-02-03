@@ -55,6 +55,10 @@ type AliveSocket = WebSocket & {
   subs?: Set<string>; // chatIds
 };
 
+type AuthedSocket = WebSocket & {
+  userId?: string;
+};
+
 const sendJson = (socket: WebSocket, payload: ServerEvent): void => {
   if (socket.readyState !== WebSocket.OPEN) return;
   socket.send(JSON.stringify(payload));
@@ -185,7 +189,17 @@ export const attachWebSocketServer = (server: Server) => {
           return;
         }
 
-        const chat = await Chat.findById(chatId).select("members").lean();
+        let chat;
+        try {
+          chat = await Chat.findById(chatId).select("members").lean();
+        } catch (err) {
+          sendJson(socket, {
+            type: "join_denied",
+            data: { chatId, reason: "Server error" },
+          });
+          return;
+        }
+
         if (!chat) {
           sendJson(socket, {
             type: "join_denied",
@@ -239,17 +253,18 @@ export const attachWebSocketServer = (server: Server) => {
 
   wss.on("close", () => clearInterval(interval));
 
-  // ---- Broadcast API: publish only to chat topic ----
   const broadcastChatCreated = (chat: ChatDTO) => {
-    // You typically publish chat_created to the members individually.
-    // For now, you can publish to each member’s “user topic” if you add it,
-    // OR let clients poll chats list. Keeping it simple: broadcast to all (optional).
-    // If you want per-user topics, tell me and I’ll add it.
     const payload: ServerEvent = { type: "chat_created", data: chat };
     const data = JSON.stringify(payload);
-    for (const client of wss.clients) {
+    const memberSet = new Set(chat.members.map(String));
+
+    for (const client of wss.clients as Set<AuthedSocket>) {
       if (client.readyState !== WebSocket.OPEN) continue;
-      client.send(data);
+      if (!client.userId) continue;
+
+      if (memberSet.has(String(client.userId))) {
+        client.send(data);
+      }
     }
   };
 
