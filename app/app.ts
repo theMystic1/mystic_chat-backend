@@ -4,6 +4,7 @@ import express from "express";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
+import http from "http";
 // import mongoSanitize from "express-mongo-sanitize";
 import hpp from "hpp";
 import cookieParser from "cookie-parser";
@@ -14,6 +15,7 @@ import cors from "cors";
 import { globalErrorHandler } from "./controllers/error.controller";
 import AppError from "./utils/app-error";
 import userRouter from "./routes/user.route";
+import chatRouter from "./routes/chat.route";
 
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
@@ -100,6 +102,7 @@ app.use(compression());
 // app.use("/", viewRouter);
 // app.use("/api/v1/tours", tourRouter);
 app.use("/api/v1/users", userRouter);
+app.use("/api/v1/chat", chatRouter);
 // app.use("/api/v1/reviews", reviewRouter);
 // app.use("/api/v1/bookings", bookingRouter);
 

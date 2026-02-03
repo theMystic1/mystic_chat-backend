@@ -2,12 +2,12 @@ import mongoose, { Schema, Types } from "mongoose";
 
 const chatSchema = new Schema(
   {
-    userId: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-      index: true,
-    },
+    // userId: {
+    //   type: Schema.Types.ObjectId,
+    //   ref: "User",
+    //   required: true,
+    //   index: true,
+    // },
 
     // likely lastMessageId (not messageId)
     lastMessageId: {
@@ -23,6 +23,9 @@ const chatSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "Message",
       default: null,
+    },
+    dmKey: {
+      type: String,
     },
 
     isMuted: { type: Boolean, default: false },
