@@ -240,13 +240,10 @@ export const sendMessage = catchAsync(async (req, res, next) => {
       );
     }
   }
-  // -----------------------------------------------------------
 
-  // 1) Chat must exist
   const chat = await Chat.findById(chatObjectId).select("members type").lean();
   if (!chat) return next(new AppError("Chat not found", 404));
 
-  // 2) User must be a member
   const isMember = (chat.members || []).some(
     (id: any) => String(id) === String(meId),
   );
