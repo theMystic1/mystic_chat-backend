@@ -193,10 +193,8 @@ export const createDmChat: RequestHandler<ChatParams, any, CreateDmBody> =
   });
 
 export const sendMessage = catchAsync(async (req, res, next) => {
-  const meRaw =
-    // req.user?._id ||
-    // (req.user as any)?.id ||
-    (req as any).user?._id || (req as any).user?.id;
+  const meRaw = (req as any).user?._id || (req as any).user?.id;
+
   if (!meRaw) return next(new AppError("Not authenticated", 401));
 
   const { chatId } = req.params;
@@ -211,6 +209,7 @@ export const sendMessage = catchAsync(async (req, res, next) => {
   const { message, type } = req.body as {
     message?: string;
     type?: "text" | "image" | "file" | "system";
+    attachments?: unknown;
   };
 
   const normalizedType = type ?? "text";
@@ -219,6 +218,30 @@ export const sendMessage = catchAsync(async (req, res, next) => {
   if (normalizedType === "text" && !messageText) {
     return next(new AppError("Message text is required", 400));
   }
+
+  // --- attachments extraction + validation (image/file only) ---
+  const attachments = Array.isArray((req.body as any).attachments)
+    ? (req.body as any).attachments
+    : [];
+
+  if (normalizedType === "image" || normalizedType === "file") {
+    const valid = attachments.some((a: any) => {
+      const kindOk = a?.kind === "image" || a?.kind === "file";
+      const urlOk = typeof a?.url === "string" && a.url.trim().length > 0;
+      return kindOk && urlOk;
+    });
+
+    if (!valid) {
+      return next(
+        new AppError(
+          "attachments is required for image/file messages and must include at least one item with a valid kind and non-empty url",
+          400,
+        ),
+      );
+    }
+  }
+  // -----------------------------------------------------------
+
   // 1) Chat must exist
   const chat = await Chat.findById(chatObjectId).select("members type").lean();
   if (!chat) return next(new AppError("Chat not found", 404));
@@ -227,15 +250,20 @@ export const sendMessage = catchAsync(async (req, res, next) => {
   const isMember = (chat.members || []).some(
     (id: any) => String(id) === String(meId),
   );
-  if (!isMember)
+  if (!isMember) {
     return next(new AppError("You do not have access to this chat", 403));
+  }
 
-  // 3) Create message
+  // 3) Create message (include attachments for image/file)
   const chatMessage = await Message.create({
     senderId: meId,
     chatId: chatObjectId,
     text: messageText,
     type: normalizedType,
+    attachments:
+      normalizedType === "image" || normalizedType === "file"
+        ? attachments
+        : [],
   });
 
   // (Optional but recommended) update chat metadata for inbox ordering
