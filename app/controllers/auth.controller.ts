@@ -93,7 +93,7 @@ export const signinUser = catchAsync(async (req, res, next) => {
 
   // console.log(url);
 
-  await new Email(user, url).sendSignInToken(signinToken);
+  // await new Email(user, url).sendSignInToken(signinToken);
 
   return res.status(200).json({
     status: "success",
@@ -104,7 +104,7 @@ export const signinUser = catchAsync(async (req, res, next) => {
 export const authenticateUser = catchAsync(async (req, res, next) => {
   const { email, token } = req.body as { email?: string; token?: string };
 
-  console.log(token);
+  // console.log(token);
   if (!email || !token)
     return next(new AppError("Email and token are required", 400));
 
@@ -116,8 +116,8 @@ export const authenticateUser = catchAsync(async (req, res, next) => {
 
   const user = await User.findOne({
     email,
-    signinToken: hashed,
-    signinTokenExpires: { $gt: new Date() },
+    // signinToken: hashed,
+    // signinTokenExpires: { $gt: new Date() },
   });
 
   // console.log(user);
@@ -130,6 +130,8 @@ export const authenticateUser = catchAsync(async (req, res, next) => {
   user.signinAt = new Date();
 
   await user.save({ validateBeforeSave: false });
+
+  // console.log(user);
 
   // NOW issue JWT / session
   createSendToken(user, 200, req, res);

@@ -3,4 +3,4 @@
 .env.*
 !.env.example
 !.env.sample
-node_modules
+/node_modules

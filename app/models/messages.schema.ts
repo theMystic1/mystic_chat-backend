@@ -43,6 +43,9 @@ export type MessageDoc = {
   // reactions
   reactions: Reaction[];
 
+  deliveredTo: Types.ObjectId[];
+  readBy: Types.ObjectId[];
+
   // optional: "server side status" for last-mile UX
   // (WhatsApp does it per-recipient, but this is a simple MVP field)
   status: DeliveryStatus;
@@ -117,6 +120,16 @@ const messageSchema = new Schema<MessageDoc>(
       type: String,
       enum: ["sent", "delivered", "read"],
       default: "sent",
+    },
+    deliveredTo: {
+      type: [Schema.Types.ObjectId],
+      ref: "User",
+      default: [],
+    },
+    readBy: {
+      type: [Schema.Types.ObjectId],
+      ref: "User",
+      default: [],
     },
   },
   { timestamps: true },

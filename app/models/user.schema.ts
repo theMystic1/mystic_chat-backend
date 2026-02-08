@@ -66,7 +66,10 @@ const userSchema = new mongoose.Schema<
       trim: true,
     },
 
-    lastSeenAt: Date,
+    lastSeenAt: {
+      type: Date,
+      default: new Date(),
+    },
     signinAt: Date,
     signinToken: String,
     signinTokenExpires: Date,

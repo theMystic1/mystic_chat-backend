@@ -40,12 +40,17 @@ mongoose
 const appServer = http.createServer(app);
 
 // Attach WS server to same HTTP server
-const { broadcastChatCreated, wss, broadcastMessageCreated } =
-  attachWebSocketServer(appServer);
+const {
+  broadcastChatCreated,
+  wss,
+  broadcastMessageCreated,
+  broadcastChatUpdated,
+} = attachWebSocketServer(appServer);
 
 // (Optional) store it for controllers to use, but strongly type it (see below)
 app.locals.broadcastChatCreated = broadcastChatCreated;
 app.locals.broadcastMessageCreated = broadcastMessageCreated;
+app.locals.broadcastChatUpdated = broadcastChatUpdated;
 
 const server = appServer.listen(PORT, HOST, () => {
   const baseUrl =
