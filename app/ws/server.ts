@@ -6,104 +6,7 @@ import { Types } from "mongoose";
 import { Chat } from "../models/chat.schema";
 import { Message } from "../models/messages.schema";
 import User from "../models/user.schema";
-
-/** Strict DTOs */
-export type ChatDTO = {
-  id: string;
-  type: "dm" | "group";
-  members: string[];
-  createdAt?: string;
-};
-
-export type MessageDTO = {
-  id: string;
-  chatId: string;
-  senderId: string;
-  type: "text" | "image" | "file" | "system";
-  text?: string;
-  createdAt?: string;
-  attachments?: { kind: "image" | "file"; url: string }[];
-};
-
-/** Server->client events */
-export type ServerEvent =
-  | { type: "welcome"; data: string }
-  | { type: "auth_ok"; data: { userId: string } }
-  | { type: "auth_error"; data: string }
-  | { type: "joined_chat"; data: { chatId: string } }
-  | { type: "join_denied"; data: { chatId: string; reason: string } }
-  | { type: "left_chat"; data: { chatId: string } }
-  | { type: "chat_created"; data: ChatDTO }
-  | { type: "message_sent"; data: MessageDTO }
-  | {
-      type: "message_delivered";
-      data: { chatId: string; messageId: string; deliveredTo: string };
-    }
-  | {
-      type: "message_read";
-      data: {
-        chatId: string;
-        messageId: string;
-        readBy: string;
-        readAt: string;
-      };
-    }
-  | {
-      type: "messages_delivered";
-      data: { chatId: string; messageIds: string[]; deliveredTo: string };
-    }
-  | {
-      type: "messages_read";
-      data: {
-        chatId: string;
-        messageIds: string[];
-        readBy: string;
-        readAt: string;
-      };
-    }
-  | { type: "typing_start"; data: { chatId: string; userId: string } }
-  | { type: "typing_stop"; data: { chatId: string; userId: string } }
-  // ✅ Presence snapshot + incremental updates
-  | { type: "presence_state"; data: { onlineUserIds: string[] } }
-  | { type: "presence_online"; data: { userId: string } }
-  | { type: "presence_offline"; data: { userId: string } }
-  | {
-      type: "chat_updated";
-      data: {
-        chatId: string;
-        lastMessage: {
-          messageId: string;
-          senderId: string;
-          type: "text" | "image" | "file" | "system";
-          text: string;
-          createdAt: string;
-        };
-        delivery?: { userId: string; lastDeliveredMessageId: string };
-        read?: { userId: string; lastReadMessageId: string };
-      };
-    };
-
-/** Client->server events */
-type ClientEvent =
-  | { type: "auth"; token: string }
-  | { type: "join_chat"; chatId: string }
-  | { type: "leave_chat"; chatId: string }
-  | { type: "ack_delivered"; chatId: string; messageId: string }
-  | { type: "ack_read"; chatId: string; messageId: string }
-  | { type: "ack_delivered_all"; chatId: string }
-  | { type: "ack_read_all"; chatId: string }
-  | { type: "typing_start"; chatId: string }
-  | { type: "typing_stop"; chatId: string };
-
-type AliveSocket = WebSocket & {
-  isAlive?: boolean;
-  userId?: string;
-  subs?: Set<string>;
-  delivered?: Set<string>; // `${chatId}:${messageId}`
-  read?: Set<string>; // `${chatId}:${messageId}`
-};
-
-type AuthedSocket = WebSocket & { userId?: string };
+import {AliveSocket,  AuthedSocket, ChatDTO, ClientEvent, MessageDTO, ServerEvent } from "../utils/types";
 
 const sendJson = (socket: WebSocket, payload: ServerEvent): void => {
   if (socket.readyState !== WebSocket.OPEN) return;
@@ -226,7 +129,7 @@ export const attachWebSocketServer = (server: Server) => {
 
   const broadcastAll = (event: ServerEvent) => {
     const data = JSON.stringify(event);
-    for (const client of wss.clients as Set<AliveSocket>) {
+    for (const client of wss.clients as unknown as Set<WebSocket>) {
       if (client.readyState !== WebSocket.OPEN) continue;
       client.send(data);
     }
@@ -517,7 +420,7 @@ export const attachWebSocketServer = (server: Server) => {
     const data = JSON.stringify(payload);
     const memberSet = new Set(chat.members.map(String));
 
-    for (const client of wss.clients as Set<AuthedSocket>) {
+    for (const client of wss.clients as unknown as Set<AuthedSocket>) {
       if (client.readyState !== WebSocket.OPEN) continue;
       if (!client.userId) continue;
       if (memberSet.has(String(client.userId))) client.send(data);
@@ -547,7 +450,7 @@ export const attachWebSocketServer = (server: Server) => {
     const evt: ServerEvent = { type: "chat_updated", data: payload };
     const data = JSON.stringify(evt);
 
-    for (const client of wss.clients as Set<AuthedSocket>) {
+    for (const client of wss.clients as unknown as Set<AuthedSocket>) {
       if (client.readyState !== WebSocket.OPEN) continue;
       if (!client.userId) continue;
       if (!memberSet.has(String(client.userId))) continue;

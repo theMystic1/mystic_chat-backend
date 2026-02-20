@@ -16,24 +16,33 @@ export const getMyChats = catchAsync(async (req, res, next) => {
   const baseQuery = Chat.find({
     members: meId,
     $or: [
-      { lastMessageId: { $ne: null } },
-      { lastMessageAt: { $exists: true, $ne: null } },
+      { type: "group" },
 
       {
-        $and: [
+        type: "dm",
+        $or: [
+          // has messages
+          { lastMessageId: { $ne: null } },
+          { lastMessageAt: { $exists: true, $ne: null } },
+
+          // empty => only show to creator
           {
-            $or: [
-              { lastMessageId: null },
-              { lastMessageId: { $exists: false } },
+            $and: [
+              {
+                $or: [
+                  { lastMessageId: null },
+                  { lastMessageId: { $exists: false } },
+                ],
+              },
+              {
+                $or: [
+                  { lastMessageAt: null },
+                  { lastMessageAt: { $exists: false } },
+                ],
+              },
+              { createdBy: meId },
             ],
           },
-          {
-            $or: [
-              { lastMessageAt: null },
-              { lastMessageAt: { $exists: false } },
-            ],
-          },
-          { createdBy: meId },
         ],
       },
     ],
@@ -118,9 +127,8 @@ export const getChatMessages = catchAsync(async (req, res, next) => {
   });
 });
 
-type ChatParams = Record<string, string>; // or { chatId: string } if you have one
-
-type CreateDmBody = {}; // receiver comes from params
+type ChatParams = Record<string, string>;
+type CreateDmBody = {};
 
 const makeDmKey = (a: Types.ObjectId, b: Types.ObjectId) => {
   const sa = String(a);
@@ -185,6 +193,135 @@ export const createDmChat: RequestHandler<ChatParams, any, CreateDmBody> =
       data: { chat },
     });
   });
+
+export const createGroupChat = catchAsync(async (req, res, next) => {
+  const meRaw = (req as any).user?._id || (req as any).user?.id;
+  if (!meRaw) return next(new AppError("Not authenticated", 401));
+
+  const { groupName, memberIds, memberEmail } = req.body as {
+    groupName?: string;
+    memberIds?: string[];
+    memberEmail?: string;
+  };
+
+  if (!groupName || typeof groupName !== "string" || !groupName.trim()) {
+    return next(new AppError("Group chat name is required", 400));
+  }
+
+  const isEmail = memberEmail?.includes("@");
+  const meId = new Types.ObjectId(String(meRaw));
+
+  const membersSet = new Set<string>();
+
+  if (memberEmail && !isEmail) {
+    return next(new AppError("Invalid email format", 400));
+  }
+
+  if (isEmail && memberEmail) {
+    const user = await User.findOne({ email: memberEmail })
+      .select("_id")
+      .lean();
+
+    if (!user) {
+      return next(new AppError("No user found with the provided email", 404));
+    }
+
+    membersSet.add(String(user._id));
+  }
+
+  const allMemberIds = Array.isArray(memberIds)
+    ? [...memberIds, ...membersSet]
+    : [];
+
+  // Validate memberIds
+  let members: Types.ObjectId[] = [];
+  if (Array.isArray(allMemberIds)) {
+    members = allMemberIds
+      .filter((id) => Types.ObjectId.isValid(id) && String(id) !== String(meId))
+      .map((id) => new Types.ObjectId(id));
+  }
+
+  // Include creator in members
+  members.push(meId);
+
+  const meKey = meId.toString();
+
+  const chat = await Chat.create({
+    type: "group",
+    groupName: groupName.trim(),
+    members,
+    createdBy: meId,
+    admins: [meId],
+  });
+
+  // Broadcast
+  req.app.locals.broadcastChatCreated?.(chat);
+
+  const populated = await Chat.findById(chat._id)
+    .populate("members")
+    .populate("lastMessageId");
+
+  return res.status(201).json({
+    status: "success",
+    data: { chat: populated },
+  });
+});
+
+export const updateGroupChat = catchAsync(async (req, res, next) => {
+  const meRaw = (req as any).user?._id || (req as any).user?.id;
+  if (!meRaw) return next(new AppError("Not authenticated", 401));
+
+  const { chatId } = req.params;
+  if (!Types.ObjectId.isValid(chatId)) {
+    return next(new AppError("Invalid chatId", 400));
+  }
+
+  const meId = new Types.ObjectId(String(meRaw));
+  const chatObjectId = new Types.ObjectId(chatId);
+
+  const { groupName, description, avatarUrl } = req.body as {
+    groupName?: string;
+    description?: string;
+    avatarUrl?: string;
+  };
+
+  if (groupName && typeof groupName === "string" && groupName.trim()) {
+    const chat = await Chat.findById(chatObjectId);
+    if (!chat) return next(new AppError("Chat not found", 404));
+
+    if (chat.type !== "group") {
+      return next(new AppError("Not a group chat", 400));
+    }
+
+    const isMember = (chat.members || []).some(
+      (m: any) => String(m) === String(meId),
+    );
+    if (!isMember) {
+      return next(new AppError("You do not have access to this chat", 403));
+    }
+
+    chat.groupName = groupName.trim();
+    chat.description = description?.trim() || "";
+    chat.avatarUrl = avatarUrl || "";
+
+    await chat.save();
+
+    // Broadcast
+    req.app.locals.broadcastChatUpdated?.({
+      chatId: String(chat._id),
+      groupName: chat.groupName,
+      description: chat.description,
+      avatarUrl: chat.avatarUrl,
+    });
+
+    return res.status(200).json({
+      status: "success",
+      data: { chat },
+    });
+  } else {
+    return next(new AppError("Invalid group name", 400));
+  }
+});
 
 export const sendMessage = catchAsync(async (req, res, next) => {
   const meRaw = (req as any).user?._id || (req as any).user?.id;
@@ -316,5 +453,120 @@ export const sendMessage = catchAsync(async (req, res, next) => {
   return res.status(201).json({
     status: "success",
     data: { message: chatMessage },
+  });
+});
+
+export const getChatMembers = catchAsync(async (req, res, next) => {
+  const meRaw = (req as any).user?._id || (req as any).user?.id;
+  if (!meRaw) return next(new AppError("Not authenticated", 401));
+
+  const { chatId } = req.params;
+  if (!Types.ObjectId.isValid(chatId)) {
+    return next(new AppError("Invalid chatId", 400));
+  }
+
+  const meId = new Types.ObjectId(String(meRaw));
+  const chatObjectId = new Types.ObjectId(chatId);
+
+  // Fetch chat with members
+  const chat = await Chat.findById(chatObjectId).populate("members").lean();
+  if (!chat) return next(new AppError("Chat not found", 404));
+
+  // if (chat.type !== "group") {
+  //   return next(new AppError("Not a group chat", 400));
+  // }
+
+  // Ensure current user is a member of this chat
+  const isMember = (chat.members || []).some(
+    (m: any) => String(m._id) === String(meId),
+  );
+  if (!isMember)
+    return next(new AppError("You do not have access to this chat", 403));
+
+  return res.status(200).json({
+    status: "success",
+    results: chat.members.length,
+    data: { members: chat.members },
+  });
+});
+
+export const addMembersToGroup = catchAsync(async (req, res, next) => {
+  const meRaw = (req as any).user?._id || (req as any).user?.id;
+  if (!meRaw) return next(new AppError("Not authenticated", 401));
+
+  const { chatId } = req.params;
+  if (!Types.ObjectId.isValid(chatId)) {
+    return next(new AppError("Invalid chatId", 400));
+  }
+
+  const meId = new Types.ObjectId(String(meRaw));
+  const chatObjectId = new Types.ObjectId(chatId);
+
+  const { memberIds, memberEmail } = req.body as {
+    memberIds?: string[];
+    memberEmail?: string;
+  };
+
+  // 1) Load chat (members are ObjectIds because of lean + select)
+  const chat = await Chat.findById(chatObjectId).select("members type").lean();
+  if (!chat) return next(new AppError("Chat not found", 404));
+
+  if (chat.type !== "group") {
+    return next(new AppError("Not a group chat", 400));
+  }
+
+  // 2) Ensure requester is a member (members are ObjectIds)
+  const isMember = (chat.members || []).some(
+    (m: any) => String(m) === String(meId),
+  );
+  if (!isMember) {
+    return next(new AppError("You do not have access to this chat", 403));
+  }
+
+  // 3) Collect incoming members
+  const membersSet = new Set<string>();
+
+  // memberIds
+  if (Array.isArray(memberIds)) {
+    for (const id of memberIds) {
+      if (!Types.ObjectId.isValid(id)) continue;
+      if (String(id) === String(meId)) continue; // skip adding self
+      membersSet.add(String(id));
+    }
+  }
+
+  // memberEmail (optional)
+  if (memberEmail) {
+    const isEmail = memberEmail.includes("@");
+    if (!isEmail) return next(new AppError("Invalid email format", 400));
+
+    const u = await User.findOne({ email: memberEmail }).select("_id").lean();
+
+    if (!u)
+      return next(new AppError("No user found with the provided email", 404));
+    if (String(u._id) !== String(meId)) membersSet.add(String(u._id));
+  }
+
+  const incomingIds = Array.from(membersSet);
+  if (!incomingIds.length) {
+    return next(new AppError("No valid members provided", 400));
+  }
+
+  // 4) Update: add all unique members
+  const updated = await Chat.findByIdAndUpdate(
+    chatObjectId,
+    {
+      $addToSet: {
+        members: { $each: incomingIds.map((id) => new Types.ObjectId(id)) },
+      },
+    },
+    { new: true },
+  )
+    .populate("members")
+    .lean();
+
+  return res.status(200).json({
+    status: "success",
+    data: { chat: updated },
   });
 });

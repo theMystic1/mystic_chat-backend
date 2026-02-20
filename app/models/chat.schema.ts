@@ -8,6 +8,8 @@ const chatSchema = new Schema(
       default: null,
       index: true,
     },
+    groupName: { type: String, default: "" },
+    avatarUrl: { type: String, default: "" },
 
     unreadCount: { type: Number, default: 0 },
     lastReadAt: { type: Date, default: null },
@@ -24,8 +26,10 @@ const chatSchema = new Schema(
 
     type: { type: String, enum: ["group", "dm"], default: "dm" },
 
-    members: [{ type: Schema.Types.ObjectId, ref: "User", required: true }],
+    members: [{ type: Schema.Types.ObjectId, ref: "User" }],
     createdBy: { type: Schema.Types.ObjectId, ref: "User" },
+    admins: [{ type: Schema.Types.ObjectId, ref: "User", default: [] }],
+
     lastMessage: {
       messageId: { type: Schema.Types.ObjectId, ref: "Message", default: null },
       senderId: { type: Schema.Types.ObjectId, ref: "User", default: null },
@@ -37,6 +41,7 @@ const chatSchema = new Schema(
       text: { type: String, default: "" },
       createdAt: { type: Date, default: null },
     },
+    description: { type: String, default: "" },
 
     delivery: {
       lastDeliveredMessageIdByUser: {

@@ -5,14 +5,20 @@ import {
   getChatMessages,
   getMyChats,
   sendMessage,
+  createGroupChat,
+  getChatMembers,
+  addMembersToGroup,
+  updateGroupChat,
 } from "../controllers/chat.controller";
 
 const router = express.Router();
 
-// Protect all routes after this middleware
 router.use(protect);
 
 router.route("/").get(getMyChats).post(createDmChat);
+router.route("/group").post(createGroupChat);
+router.route("/group/:chatId").patch(updateGroupChat);
+router.route("/members/:chatId").get(getChatMembers).patch(addMembersToGroup);
 router.route("/messages/:chatId").get(getChatMessages);
 
 // send message
