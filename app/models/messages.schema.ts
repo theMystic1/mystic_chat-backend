@@ -11,6 +11,7 @@ type Attachment = {
   name?: string;
   width?: number;
   height?: number;
+  durationMs: { type: Number }; // for audio
 };
 
 type Reaction = {
@@ -43,6 +44,9 @@ export type MessageDoc = {
   // reactions
   reactions: Reaction[];
 
+  deliveredTo: Types.ObjectId[];
+  readBy: Types.ObjectId[];
+
   // optional: "server side status" for last-mile UX
   // (WhatsApp does it per-recipient, but this is a simple MVP field)
   status: DeliveryStatus;
@@ -51,15 +55,13 @@ export type MessageDoc = {
 
 const attachmentSchema = new Schema<Attachment>(
   {
-    kind: { type: String, enum: ["image", "file"], required: true },
+    kind: { type: String, enum: ["image", "audio", "file"], required: true },
     url: { type: String, required: true },
-
-    mimeType: { type: String, default: "" },
-    size: { type: Number, default: 0 },
-    name: { type: String, default: "" },
-
-    width: { type: Number, default: null },
-    height: { type: Number, default: null },
+    mimeType: { type: String },
+    size: { type: Number },
+    durationMs: { type: Number },
+    width: { type: Number },
+    height: { type: Number },
   },
   { _id: false },
 );
@@ -77,7 +79,7 @@ const messageSchema = new Schema<MessageDoc>(
   {
     chatId: {
       type: Schema.Types.ObjectId,
-      ref: "Chat", // or "Chat" if that’s your model name
+      ref: "Chat",
       required: true,
       index: true,
     },
@@ -117,6 +119,16 @@ const messageSchema = new Schema<MessageDoc>(
       type: String,
       enum: ["sent", "delivered", "read"],
       default: "sent",
+    },
+    deliveredTo: {
+      type: [Schema.Types.ObjectId],
+      ref: "User",
+      default: [],
+    },
+    readBy: {
+      type: [Schema.Types.ObjectId],
+      ref: "User",
+      default: [],
     },
   },
   { timestamps: true },

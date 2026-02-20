@@ -2,9 +2,9 @@ import express from "express";
 
 import {
   authenticateUser,
+  logoutUser,
   protect,
   signinUser,
-  verifyJwt,
 } from "../controllers/auth.controller";
 import {
   deleteUser,
@@ -25,5 +25,6 @@ router.use(protect);
 
 router.route("/me").get(getMe, getOneUser).patch(updateMe);
 router.route("/:id").get(getOneUser).patch(updateUser).delete(deleteUser);
+router.post("/logout", logoutUser);
 
 export default router;

@@ -55,13 +55,16 @@ const createSendToken = (
   res: Response,
 ) => {
   const token = signToken(user._id);
+  const days = Number(process.env.JWT_COOKIE_EXPIRES_IN ?? "7");
+  const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  const isProd = process.env.NODE_ENV === "production";
 
   res.cookie("access_token", token, {
-    expires: new Date(
-      Date.now() + +process.env.JWT_COOKIE_EXPIRES_IN! * 24 * 60 * 60 * 1000,
-    ),
+    expires,
     httpOnly: true,
-    secure: req.secure || req.headers["x-forwarded-proto"] === "https",
+    path: "/",
+    sameSite: isProd ? "none" : "lax",
+    secure: isProd,
   });
 
   res.status(statusCode).json({
@@ -93,7 +96,7 @@ export const signinUser = catchAsync(async (req, res, next) => {
 
   // console.log(url);
 
-  await new Email(user, url).sendSignInToken(signinToken);
+  // await new Email(user, url).sendSignInToken(signinToken);
 
   return res.status(200).json({
     status: "success",
@@ -104,7 +107,7 @@ export const signinUser = catchAsync(async (req, res, next) => {
 export const authenticateUser = catchAsync(async (req, res, next) => {
   const { email, token } = req.body as { email?: string; token?: string };
 
-  console.log(token);
+  // console.log(token);
   if (!email || !token)
     return next(new AppError("Email and token are required", 400));
 
@@ -116,11 +119,7 @@ export const authenticateUser = catchAsync(async (req, res, next) => {
 
   const user = await User.findOne({
     email,
-    signinToken: hashed,
-    signinTokenExpires: { $gt: new Date() },
   });
-
-  // console.log(user);
 
   if (!user) return next(new AppError("Invalid or expired sign-in code", 401));
 
@@ -130,6 +129,8 @@ export const authenticateUser = catchAsync(async (req, res, next) => {
   user.signinAt = new Date();
 
   await user.save({ validateBeforeSave: false });
+
+  // console.log(user);
 
   // NOW issue JWT / session
   createSendToken(user, 200, req, res);
@@ -142,7 +143,7 @@ export const protect: RequestHandler = catchAsync(async (req, res, next) => {
   const auth = req.headers.authorization;
   if (auth?.startsWith("Bearer ")) {
     token = auth.split(" ")[1];
-  } else if (req.cookies?.jwt) {
+  } else if (req.cookies?.access_token) {
     token = req.cookies.access_token as string;
   }
 
@@ -173,4 +174,29 @@ export const protect: RequestHandler = catchAsync(async (req, res, next) => {
   res.locals.user = currentUser;
 
   return next();
+});
+
+export const logoutUser = catchAsync(async (req: Request, res: Response) => {
+  const meRaw = (req as any).user?._id || (req as any).user?.id;
+
+  if (!meRaw)
+    return res.status(200).json({
+      status: "success",
+    });
+
+  await User.findByIdAndUpdate(meRaw, {
+    lastSeenAt: new Date(),
+  });
+
+  const isProd = process.env.NODE_ENV === "production";
+  res.clearCookie("access_token", {
+    httpOnly: true,
+    path: "/",
+    sameSite: isProd ? "none" : "lax",
+    secure: isProd,
+  });
+
+  res.status(200).json({
+    status: "success",
+  });
 });
