@@ -7,7 +7,8 @@
     "start": "node dist/app/server.js",
     "dev": "nodemon app/server.ts",
     "start:prod": "NODE_ENV=production nodemon app/server.ts",
-    "debug": "ndb app/server.ts"
+    "debug": "ndb app/server.ts",
+    "build": "tsc"
   },
   "author": "Lucky Chukwujekwu",
   "license": "ISC",
