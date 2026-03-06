@@ -4,7 +4,7 @@
   "description": "An email only social platform ",
   "main": "server.js",
   "scripts": {
-    "start": "node dist/app/server.js",
+    "start": "node dist/server.js",
     "dev": "nodemon app/server.ts",
     "start:prod": "NODE_ENV=production nodemon app/server.ts",
     "debug": "ndb app/server.ts",
