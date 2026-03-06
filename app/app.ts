@@ -101,6 +101,7 @@ app.use(compression());
 // 3) ROUTES
 // app.use("/", viewRouter);
 // app.use("/api/v1/tours", tourRouter);
+app.get("/health", (_req, res) => res.status(200).send("ok"));
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/chat", chatRouter);
 // app.use("/api/v1/reviews", reviewRouter);
