@@ -27,8 +27,6 @@ app.set("trust proxy", process.env.NODE_ENV === "production" ? 1 : false);
 app.set("view engine", "pug");
 app.set("views", path.join(__dirname, "views"));
 
-// 1) GLOBAL MIDDLEWARES
-// Implement CORS
 app.use(
   cors({
     origin: [
